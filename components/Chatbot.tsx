@@ -160,7 +160,12 @@ export const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
                             <SendIcon />
                         </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 text-center">Press Enter to send</p>
+                    {inputError && (
+                        <p id="input-error" className="text-xs text-red-600 mt-1 text-center">{inputError}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1 text-center">
+                        Press Enter to send ({input.trim().length}/{MAX_MESSAGE_LENGTH})
+                    </p>
                 </div>
             </div>
              <style>{`

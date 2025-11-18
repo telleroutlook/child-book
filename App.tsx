@@ -17,29 +17,52 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [loadingMessage, setLoadingMessage] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+    const [lastGenerated, setLastGenerated] = useState<{ theme: string; name: string } | null>(null);
+
+    const clearMessages = useCallback(() => {
+        setError(null);
+        setSuccess(null);
+    }, []);
 
     const handleGenerate = useCallback(async (theme: string, name: string) => {
-        if (!theme.trim() || !name.trim()) {
+        clearMessages();
+        
+        const trimmedTheme = theme.trim();
+        const trimmedName = name.trim();
+        
+        if (!trimmedTheme || !trimmedName) {
             setError('Please provide both a theme and a name.');
             return;
         }
         
-        if (name.trim().length < 1) {
-            setError('Child name must be at least 1 character long.');
+        if (trimmedName.length < 1 || trimmedName.length > 50) {
+            setError('Child name must be between 1 and 50 characters long.');
             return;
         }
         
-        if (theme.trim().length < 3) {
-            setError('Theme must be at least 3 characters long.');
+        if (trimmedTheme.length < 3 || trimmedTheme.length > 100) {
+            setError('Theme must be between 3 and 100 characters long.');
+            return;
+        }
+        
+        const specialCharRegex = /^[a-zA-Z0-9\s\-'.]+$/;
+        if (!specialCharRegex.test(trimmedName)) {
+            setError('Child name contains invalid characters. Only letters, numbers, spaces, hyphens, and apostrophes are allowed.');
+            return;
+        }
+        
+        if (!specialCharRegex.test(trimmedTheme)) {
+            setError('Theme contains invalid characters. Only letters, numbers, spaces, hyphens, and apostrophes are allowed.');
             return;
         }
 
         setIsLoading(true);
-        setError(null);
         setGeneratedImages([]);
-        setTheme(theme.trim());
-        setChildName(name.trim());
+        setTheme(trimmedTheme);
+        setChildName(trimmedName);
+        setLastGenerated({ theme: trimmedTheme, name: trimmedName });
 
         try {
             setLoadingMessage('Getting creative ideas...');
@@ -57,6 +80,8 @@ const App: React.FC = () => {
 
             // Process images sequentially to prevent rate limiting and improve UX
             const allImages: GeneratedImage[] = [];
+            const failedImages: number[] = [];
+            
             for (let index = 0; index < pages.length; index++) {
                 setLoadingMessage(messages[index] || `Generating page ${index + 1}...`);
                 
@@ -91,19 +116,37 @@ const App: React.FC = () => {
                     });
                 } catch (pageError) {
                     console.error(`Error generating page ${index + 1}:`, pageError);
+                    failedImages.push(index + 1);
                     // Add a placeholder image in case of error
                     allImages.push({
-                        src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="%23f8f9fa"/><text x="50%" y="50%" font-family="Arial" font-size="24" fill="%236c757d" text-anchor="middle" dominant-baseline="middle">Image ${index + 1} failed to load</text></svg>`,
+                        src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="%23fef2f2"/><text x="50%" y="45%" font-family="Arial" font-size="20" fill="%23dc2626" text-anchor="middle" dominant-baseline="middle">Image ${index + 1}</text><text x="50%" y="55%" font-family="Arial" font-size="16" fill="%236b7280" text-anchor="middle" dominant-baseline="middle">Failed to load</text></svg>`,
                         alt: `Failed to generate image for: ${pages[index].prompt}`
                     });
                 }
             }
 
             setGeneratedImages(allImages);
+            
+            if (failedImages.length > 0) {
+                const successCount = allImages.length - failedImages.length;
+                if (successCount > 0) {
+                    setSuccess(`Successfully generated ${successCount} out of ${allImages.length} pages. Pages ${failedImages.join(', ')} failed to load.`);
+                } else {
+                    setError('Failed to generate all images. Please try again with a different theme.');
+                }
+            } else {
+                setSuccess(`Successfully generated ${allImages.length} pages for "${trimmedTheme}"!`);
+            }
         } catch (err) {
             console.error('Generation error:', err);
             const errorMessage = err instanceof Error ? err.message : 'Something went wrong while creating the images. Please try again.';
             setError(errorMessage);
+            
+            if (errorMessage.includes('API key')) {
+                setError('API key not configured. Please check your environment variables.');
+            } else if (errorMessage.includes('rate limit')) {
+                setError('Rate limit exceeded. Please wait a moment and try again.');
+            }
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
@@ -111,12 +154,21 @@ const App: React.FC = () => {
     }, []);
 
     const handleDownloadPdf = useCallback(() => {
+        clearMessages();
+        
         if (generatedImages.length === 0) {
             setError('No images available to download. Please generate a coloring book first.');
             return;
         }
-        generatePdf(generatedImages, childName);
-    }, [generatedImages, childName]);
+        
+        try {
+            generatePdf(generatedImages, childName);
+            setSuccess('PDF downloaded successfully!');
+        } catch (error) {
+            console.error('PDF download error:', error);
+            setError('Failed to download PDF. Please try again.');
+        }
+    }, [generatedImages, childName, clearMessages]);
 
     return (
         <div className="min-h-screen bg-rose-50 font-sans text-gray-800 antialiased">
@@ -130,10 +182,33 @@ const App: React.FC = () => {
                 <InputForm onGenerate={handleGenerate} isLoading={isLoading} />
 
                 {error && (
-                    <div className="max-w-3xl mx-auto mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                    <div className="max-w-3xl mx-auto mt-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg" role="alert" aria-live="polite">
                         <div className="flex items-start">
-                            <span className="mr-2">⚠️</span>
+                            <span className="mr-2" aria-hidden="true">⚠️</span>
                             <span>{error}</span>
+                            <button 
+                                onClick={clearMessages} 
+                                className="ml-auto text-red-500 hover:text-red-700"
+                                aria-label="Dismiss error"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                )}
+                
+                {success && (
+                    <div className="max-w-3xl mx-auto mt-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg" role="status" aria-live="polite">
+                        <div className="flex items-start">
+                            <span className="mr-2" aria-hidden="true">✓</span>
+                            <span>{success}</span>
+                            <button 
+                                onClick={clearMessages} 
+                                className="ml-auto text-green-500 hover:text-green-700"
+                                aria-label="Dismiss success message"
+                            >
+                                ✕
+                            </button>
                         </div>
                     </div>
                 )}
@@ -150,9 +225,11 @@ const App: React.FC = () => {
                         <div className="text-center mb-8">
                             <h3 className="text-2xl font-bold text-rose-800">Your Coloring Book is Ready!</h3>
                             <button
-                                onClick={handleDownloadPdf}
-                                className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 shadow-lg"
-                            >
+                        onClick={handleDownloadPdf}
+                        className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 shadow-lg disabled:bg-green-300 disabled:cursor-not-allowed"
+                        disabled={isLoading}
+                        aria-label="Download coloring book as PDF"
+                    >
                                 <DownloadIcon />
                                 Download as PDF
                             </button>

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SparklesIcon } from './icons';
 
 interface InputFormProps {
@@ -10,11 +10,64 @@ interface InputFormProps {
 export const InputForm: React.FC<InputFormProps> = ({ onGenerate, isLoading }) => {
     const [theme, setTheme] = useState('');
     const [name, setName] = useState('');
+    const [errors, setErrors] = useState<{ theme?: string; name?: string }>({});
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const validateInput = useCallback((value: string, field: 'theme' | 'name'): string | undefined => {
+        const trimmed = value.trim();
+        
+        if (field === 'theme') {
+            if (!trimmed) return 'Theme is required';
+            if (trimmed.length < 3) return 'Theme must be at least 3 characters';
+            if (trimmed.length > 100) return 'Theme must be less than 100 characters';
+            if (!/^[a-zA-Z0-9\s\-'.]+$/.test(trimmed)) {
+                return 'Theme contains invalid characters';
+            }
+        } else if (field === 'name') {
+            if (!trimmed) return 'Child name is required';
+            if (trimmed.length < 1) return 'Name must be at least 1 character';
+            if (trimmed.length > 50) return 'Name must be less than 50 characters';
+            if (!/^[a-zA-Z0-9\s\-'.]+$/.test(trimmed)) {
+                return 'Name contains invalid characters';
+            }
+        }
+        
+        return undefined;
+    }, []);
+
+    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, field: 'theme' | 'name') => {
+        const value = e.target.value;
+        
+        if (field === 'theme') {
+            setTheme(value);
+        } else {
+            setName(value);
+        }
+        
+        // Clear error for this field when user starts typing
+        setErrors(prev => ({ ...prev, [field]: undefined }));
+    }, []);
+
+    const handleBlur = useCallback((field: 'theme' | 'name') => {
+        const value = field === 'theme' ? theme : name;
+        const error = validateInput(value, field);
+        setErrors(prev => ({ ...prev, [field]: error }));
+    }, [theme, name, validateInput]);
+
+    const handleSubmit = useCallback((e: React.FormEvent) => {
         e.preventDefault();
-        onGenerate(theme, name);
-    };
+        
+        const themeError = validateInput(theme, 'theme');
+        const nameError = validateInput(name, 'name');
+        
+        setErrors({
+            theme: themeError,
+            name: nameError
+        });
+        
+        if (!themeError && !nameError) {
+            onGenerate(theme, name);
+        }
+    }, [theme, name, validateInput, onGenerate]);
 
     return (
         <form onSubmit={handleSubmit} className="max-w-xl mx-auto p-6 bg-white rounded-xl shadow-lg border border-rose-100 space-y-4">
@@ -24,13 +77,22 @@ export const InputForm: React.FC<InputFormProps> = ({ onGenerate, isLoading }) =
                     id="theme"
                     type="text"
                     value={theme}
-                    onChange={(e) => setTheme(e.target.value)}
+                    onChange={(e) => handleInputChange(e, 'theme')}
+                    onBlur={() => handleBlur('theme')}
                     placeholder="e.g., Space Dinosaurs"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400 ${
+                        errors.theme ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     required
                     disabled={isLoading}
+                    aria-invalid={errors.theme ? 'true' : 'false'}
+                    aria-describedby={errors.theme ? 'theme-error' : 'theme-help'}
+                    maxLength={100}
                 />
-                <p className="text-xs text-gray-500">Enter a fun theme for the coloring book (minimum 3 characters)</p>
+                <p id="theme-help" className="text-xs text-gray-500">Enter a fun theme for the coloring book (minimum 3 characters)</p>
+                {errors.theme && (
+                    <p id="theme-error" className="text-xs text-red-600 mt-1">{errors.theme}</p>
+                )}
             </div>
             <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">Child's First Name</label>
@@ -38,18 +100,28 @@ export const InputForm: React.FC<InputFormProps> = ({ onGenerate, isLoading }) =
                     id="name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => handleInputChange(e, 'name')}
+                    onBlur={() => handleBlur('name')}
                     placeholder="e.g., Alex"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400 ${
+                        errors.name ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     required
                     disabled={isLoading}
+                    aria-invalid={errors.name ? 'true' : 'false'}
+                    aria-describedby={errors.name ? 'name-error' : 'name-help'}
+                    maxLength={50}
                 />
-                <p className="text-xs text-gray-500">The child's name will appear on the cover (minimum 1 character)</p>
+                <p id="name-help" className="text-xs text-gray-500">The child's name will appear on the cover (minimum 1 character)</p>
+                {errors.name && (
+                    <p id="name-error" className="text-xs text-red-600 mt-1">{errors.name}</p>
+                )}
             </div>
             <button
                 type="submit"
-                disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-300 disabled:cursor-not-allowed transition-all duration-300 ease-in-out shadow-md"
+                disabled={isLoading || !!errors.theme || !!errors.name}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-300 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-300 ease-in-out shadow-md"
+                aria-busy={isLoading ? 'true' : 'false'}
             >
                 {isLoading ? (
                     <>
