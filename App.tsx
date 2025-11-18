@@ -20,19 +20,30 @@ const App: React.FC = () => {
     const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
 
     const handleGenerate = useCallback(async (theme: string, name: string) => {
-        if (!theme || !name) {
+        if (!theme.trim() || !name.trim()) {
             setError('Please provide both a theme and a name.');
             return;
         }
+        
+        if (name.trim().length < 1) {
+            setError('Child name must be at least 1 character long.');
+            return;
+        }
+        
+        if (theme.trim().length < 3) {
+            setError('Theme must be at least 3 characters long.');
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setGeneratedImages([]);
-        setTheme(theme);
-        setChildName(name);
+        setTheme(theme.trim());
+        setChildName(name.trim());
 
         try {
             setLoadingMessage('Getting creative ideas...');
-            const pages = await generateColoringPages(theme, name);
+            const pages = await generateColoringPages(theme.trim(), name.trim());
             
             // Staggered loading message updates
             const messages = [
@@ -44,22 +55,55 @@ const App: React.FC = () => {
                 "Finalizing the last page..."
             ];
 
-            const imagePromises = pages.map(async (page, index) => {
+            // Process images sequentially to prevent rate limiting and improve UX
+            const allImages: GeneratedImage[] = [];
+            for (let index = 0; index < pages.length; index++) {
                 setLoadingMessage(messages[index] || `Generating page ${index + 1}...`);
-                const response = await page.generationPromise;
-                const base64ImageBytes = response.generatedImages[0].image.imageBytes;
-                return {
-                    src: `data:image/png;base64,${base64ImageBytes}`,
-                    alt: page.prompt
-                };
-            });
-
-            const allImages = await Promise.all(imagePromises);
+                
+                try {
+                    const page = pages[index];
+                    const result = await page.generationPromise;
+                    const response = await result.response;
+                    
+                    // Extract image data from the response
+                    let base64ImageBytes = '';
+                    
+                    // Try different possible response formats
+                    if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.inlineData?.data) {
+                        // Format: response.candidates[0].content.parts[0].inlineData.data
+                        base64ImageBytes = response.candidates[0].content.parts[0].inlineData.data;
+                    } else if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
+                        // Sometimes the image data might be in a text field (unlikely but possible)
+                        base64ImageBytes = response.candidates[0].content.parts[0].text;
+                    } else {
+                        // Log the actual response structure for debugging
+                        console.log('Full response structure:', JSON.stringify(response, null, 2));
+                        throw new Error(`Unexpected response format for page ${index + 1}. Check console for details.`);
+                    }
+                    
+                    if (!base64ImageBytes) {
+                        throw new Error(`Failed to get image data for page ${index + 1}`);
+                    }
+                    
+                    allImages.push({
+                        src: `data:image/jpeg;base64,${base64ImageBytes}`,
+                        alt: page.prompt
+                    });
+                } catch (pageError) {
+                    console.error(`Error generating page ${index + 1}:`, pageError);
+                    // Add a placeholder image in case of error
+                    allImages.push({
+                        src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="%23f8f9fa"/><text x="50%" y="50%" font-family="Arial" font-size="24" fill="%236c757d" text-anchor="middle" dominant-baseline="middle">Image ${index + 1} failed to load</text></svg>`,
+                        alt: `Failed to generate image for: ${pages[index].prompt}`
+                    });
+                }
+            }
 
             setGeneratedImages(allImages);
         } catch (err) {
-            console.error(err);
-            setError('Something went wrong while creating the images. Please try again.');
+            console.error('Generation error:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Something went wrong while creating the images. Please try again.';
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
@@ -67,7 +111,10 @@ const App: React.FC = () => {
     }, []);
 
     const handleDownloadPdf = useCallback(() => {
-        if (generatedImages.length === 0) return;
+        if (generatedImages.length === 0) {
+            setError('No images available to download. Please generate a coloring book first.');
+            return;
+        }
         generatePdf(generatedImages, childName);
     }, [generatedImages, childName]);
 
@@ -84,7 +131,10 @@ const App: React.FC = () => {
 
                 {error && (
                     <div className="max-w-3xl mx-auto mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                        {error}
+                        <div className="flex items-start">
+                            <span className="mr-2">⚠️</span>
+                            <span>{error}</span>
+                        </div>
                     </div>
                 )}
                 
@@ -101,7 +151,7 @@ const App: React.FC = () => {
                             <h3 className="text-2xl font-bold text-rose-800">Your Coloring Book is Ready!</h3>
                             <button
                                 onClick={handleDownloadPdf}
-                                className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105"
+                                className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 shadow-lg"
                             >
                                 <DownloadIcon />
                                 Download as PDF

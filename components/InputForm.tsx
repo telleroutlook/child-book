@@ -28,7 +28,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onGenerate, isLoading }) =
                     placeholder="e.g., Space Dinosaurs"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400"
                     required
+                    disabled={isLoading}
                 />
+                <p className="text-xs text-gray-500">Enter a fun theme for the coloring book (minimum 3 characters)</p>
             </div>
             <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">Child's First Name</label>
@@ -40,12 +42,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onGenerate, isLoading }) =
                     placeholder="e.g., Alex"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 bg-white text-gray-900 placeholder-gray-400"
                     required
+                    disabled={isLoading}
                 />
+                <p className="text-xs text-gray-500">The child's name will appear on the cover (minimum 1 character)</p>
             </div>
             <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-300 disabled:cursor-not-allowed transition-all duration-300 ease-in-out"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-300 disabled:cursor-not-allowed transition-all duration-300 ease-in-out shadow-md"
             >
                 {isLoading ? (
                     <>
