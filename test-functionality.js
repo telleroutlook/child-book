@@ -9,9 +9,9 @@ console.log('🧪 开始测试 AI Coloring Book Creator 功能...\n');
 
 // 测试1: 环境变量和API配置
 console.log('1️⃣ 测试环境变量和API配置...');
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.VITE_GEMINI_API_KEY;
 if (!API_KEY) {
-    console.error('❌ GEMINI_API_KEY 未设置');
+    console.error('❌ VITE_GEMINI_API_KEY 未设置');
     process.exit(1);
 }
 console.log('✅ API Key 已配置');

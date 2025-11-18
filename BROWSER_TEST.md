@@ -63,7 +63,7 @@ npm run dev
 ### 问题1: API调用失败
 **症状**: 图片生成失败，显示错误消息
 **原因**: API密钥无效或配额用尽
-**解决**: 检查.env文件中的GEMINI_API_KEY
+**解决**: 检查.env文件中的VITE_GEMINI_API_KEY
 
 ### 问题2: PDF生成失败
 **症状**: 点击下载PDF无反应或报错
